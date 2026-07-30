@@ -1,4 +1,4 @@
-# Python bytecode
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,7 +9,7 @@ __pycache__/
 venv/
 env/
 
-# Environment variables and secrets
+# Environment variables
 .env
 .env.*
 !.env.example
@@ -20,6 +20,7 @@ media/
 staticfiles/
 local_settings.py
 *.log
+schema.yml
 
 # Tests and coverage
 .pytest_cache/
