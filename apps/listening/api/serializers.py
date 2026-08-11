@@ -1,14 +1,21 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.listening.choices import (
     CefrLevel,
     ListeningAccent,
+    ListeningAnswerSource,
     ListeningContentStatus,
     ListeningContentType,
     ListeningPracticeMode,
     ListeningSourceType,
 )
-from apps.listening.models import ListeningContent
+from apps.listening.models import (
+    MAX_TRANSCRIPT_LENGTH,
+    ListeningAttempt,
+    ListeningContent,
+)
 
 LISTENING_ORDERING_CHOICES = (
     ("featured", "Featured first"),
@@ -43,12 +50,12 @@ class ListeningContentFilterSerializer(
     )
 
     status = serializers.ChoiceField(
-        choices=ListeningContentStatus.choices,
+        choices=(ListeningContentStatus.choices),
         required=False,
     )
 
     practiceMode = serializers.ChoiceField(
-        choices=ListeningPracticeMode.choices,
+        choices=(ListeningPracticeMode.choices),
         required=False,
     )
 
@@ -107,12 +114,12 @@ class ListeningContentSummarySerializer(
     )
 
     estimatedPracticeMinutes = serializers.IntegerField(
-        source="estimated_practice_minutes",
+        source=("estimated_practice_minutes"),
         read_only=True,
     )
 
     averageWordsPerMinute = serializers.IntegerField(
-        source="average_words_per_minute",
+        source=("average_words_per_minute"),
         read_only=True,
         allow_null=True,
     )
@@ -136,7 +143,7 @@ class ListeningContentSummarySerializer(
 
     availablePracticeModes = serializers.ListField(
         child=serializers.ChoiceField(
-            choices=ListeningPracticeMode.choices,
+            choices=(ListeningPracticeMode.choices),
         ),
         source="available_practice_modes",
         read_only=True,
@@ -147,13 +154,9 @@ class ListeningContentSummarySerializer(
         read_only=True,
     )
 
-    isCompleted = serializers.SerializerMethodField(
-        method_name="get_is_completed",
-    )
+    isCompleted = serializers.SerializerMethodField()
 
-    bestAccuracyScore = serializers.SerializerMethodField(
-        method_name="get_best_accuracy_score",
-    )
+    bestAccuracyScore = serializers.SerializerMethodField()
 
     class Meta:
         model = ListeningContent
@@ -186,6 +189,7 @@ class ListeningContentSummarySerializer(
         obj: ListeningContent,
     ) -> str | None:
         description = obj.description.strip()
+
         return description or None
 
     def get_is_completed(
@@ -219,16 +223,12 @@ class ListeningContentSummarySerializer(
 class ListeningContentDetailSerializer(
     ListeningContentSummarySerializer,
 ):
-    audioUrl = serializers.SerializerMethodField(
-        method_name="get_audio_url",
-    )
+    audioUrl = serializers.SerializerMethodField()
 
-    coverImageUrl = serializers.SerializerMethodField(
-        method_name="get_cover_image_url",
-    )
+    coverImageUrl = serializers.SerializerMethodField()
 
     transcriptionLanguage = serializers.CharField(
-        source="transcription_language",
+        source=("transcription_language"),
         read_only=True,
     )
 
@@ -244,7 +244,7 @@ class ListeningContentDetailSerializer(
     )
 
     minimumTranscriptWords = serializers.IntegerField(
-        source="minimum_transcript_words",
+        source=("minimum_transcript_words"),
         read_only=True,
     )
 
@@ -253,13 +253,9 @@ class ListeningContentDetailSerializer(
         read_only=True,
     )
 
-    audioAttribution = serializers.SerializerMethodField(
-        method_name="get_audio_attribution",
-    )
+    audioAttribution = serializers.SerializerMethodField()
 
-    class Meta(
-        ListeningContentSummarySerializer.Meta,
-    ):
+    class Meta(ListeningContentSummarySerializer.Meta):
         fields = ListeningContentSummarySerializer.Meta.fields + (
             "audioUrl",
             "coverImageUrl",
@@ -287,9 +283,7 @@ class ListeningContentDetailSerializer(
                 request = self.context.get("request")
 
                 if request is not None:
-                    return request.build_absolute_uri(
-                        file_url,
-                    )
+                    return request.build_absolute_uri(file_url)
 
                 return file_url
 
@@ -310,3 +304,127 @@ class ListeningContentDetailSerializer(
         attribution = obj.audio_attribution.strip()
 
         return attribution or None
+
+
+class ListeningAttemptStartSerializer(
+    serializers.Serializer,
+):
+    contentId = serializers.UUIDField(
+        source="content_id",
+    )
+
+    practiceMode = serializers.ChoiceField(
+        source="practice_mode",
+        choices=(ListeningPracticeMode.choices),
+    )
+
+    answerSource = serializers.ChoiceField(
+        source="answer_source",
+        choices=(ListeningAnswerSource.choices),
+        default=ListeningAnswerSource.TYPED,
+    )
+
+
+class ListeningAttemptDraftUpdateSerializer(
+    serializers.Serializer,
+):
+    answerSource = serializers.ChoiceField(
+        source="answer_source",
+        choices=(ListeningAnswerSource.choices),
+        required=False,
+    )
+
+    transcript = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        trim_whitespace=False,
+        max_length=MAX_TRANSCRIPT_LENGTH,
+    )
+
+    currentPositionSeconds = serializers.DecimalField(
+        source=("current_position_seconds"),
+        required=False,
+        max_digits=8,
+        decimal_places=3,
+        min_value=Decimal("0"),
+    )
+
+    playbackRate = serializers.DecimalField(
+        source="playback_rate",
+        required=False,
+        max_digits=3,
+        decimal_places=2,
+        min_value=Decimal("0.50"),
+        max_value=Decimal("2.00"),
+    )
+
+    def validate(
+        self,
+        attrs: dict,
+    ) -> dict:
+        if not attrs:
+            raise serializers.ValidationError("At least one draft field must be provided.")
+
+        return attrs
+
+
+class ListeningAttemptDraftSerializer(
+    serializers.ModelSerializer,
+):
+    attemptId = serializers.UUIDField(
+        source="id",
+        read_only=True,
+    )
+
+    contentId = serializers.UUIDField(
+        source="content_id",
+        read_only=True,
+    )
+
+    practiceMode = serializers.CharField(
+        source="practice_mode",
+        read_only=True,
+    )
+
+    answerSource = serializers.CharField(
+        source="answer_source",
+        read_only=True,
+    )
+
+    currentPositionSeconds = serializers.FloatField(
+        source=("current_position_seconds"),
+        read_only=True,
+    )
+
+    playbackRate = serializers.FloatField(
+        source="playback_rate",
+        read_only=True,
+    )
+
+    createdAt = serializers.DateTimeField(
+        source="created_at",
+        read_only=True,
+    )
+
+    updatedAt = serializers.DateTimeField(
+        source="updated_at",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ListeningAttempt
+
+        fields = (
+            "attemptId",
+            "contentId",
+            "practiceMode",
+            "answerSource",
+            "transcript",
+            "currentPositionSeconds",
+            "playbackRate",
+            "status",
+            "createdAt",
+            "updatedAt",
+        )
+
+        read_only_fields = fields

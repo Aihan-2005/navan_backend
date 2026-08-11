@@ -1,21 +1,28 @@
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
+from django.core.exceptions import (
+    ValidationError,
+)
 from django.core.files.uploadedfile import (
     SimpleUploadedFile,
 )
 
 from apps.listening.choices import (
-    CefrLevel,
-    ListeningAccent,
-    ListeningContentStatus,
+    ListeningAttemptStatus,
     ListeningContentType,
     ListeningPracticeMode,
     ListeningSourceType,
 )
-from apps.listening.models import ListeningContent
+from apps.listening.models import (
+    ListeningAttempt,
+)
+from apps.listening.tests.factories import (
+    build_listening_content,
+    create_listening_content,
+    create_user,
+)
 from apps.listening.validators import (
     MAX_AUDIO_SIZE_BYTES,
     validate_audio_file_size,
@@ -24,55 +31,8 @@ from apps.listening.validators import (
 pytestmark = pytest.mark.django_db
 
 
-def build_content(
-    **overrides: object,
-) -> ListeningContent:
-    values: dict[str, object] = {
-        "title": "A day in London",
-        "description": ("A short daily-routine podcast."),
-        "content_type": (ListeningContentType.PODCAST),
-        "source_type": (ListeningSourceType.PLATFORM),
-        "cefr_level": CefrLevel.B1,
-        "accent": ListeningAccent.BRITISH,
-        "status": ListeningContentStatus.READY,
-        "transcription_language": "en",
-        "audio_file": SimpleUploadedFile(
-            "sample.mp3",
-            b"fake-audio-content",
-            content_type="audio/mpeg",
-        ),
-        "duration_seconds": 284,
-        "estimated_practice_minutes": 14,
-        "average_words_per_minute": 128,
-        "speaker_count": 1,
-        "topics": [
-            "daily life",
-            "transport",
-        ],
-        "vocabulary_preview": [
-            "commute",
-            "neighborhood",
-        ],
-        "available_practice_modes": [
-            ListeningPracticeMode.FULL_DICTATION,
-            ListeningPracticeMode.GUIDED_DICTATION,
-        ],
-        "instructions": [
-            "Listen once without pausing.",
-        ],
-        "hint_words": ["commute"],
-        "minimum_transcript_words": 20,
-        "reference_transcript": ("This is the reference transcript."),
-        "is_published": True,
-    }
-
-    values.update(overrides)
-
-    return ListeningContent(**values)
-
-
 def test_platform_content_is_valid() -> None:
-    content = build_content()
+    content = build_listening_content()
 
     content.full_clean()
 
@@ -81,7 +41,7 @@ def test_platform_content_is_valid() -> None:
 
 
 def test_user_upload_requires_an_owner() -> None:
-    content = build_content(
+    content = build_listening_content(
         source_type=(ListeningSourceType.USER_UPLOAD),
         is_published=False,
     )
@@ -95,15 +55,18 @@ def test_user_upload_requires_an_owner() -> None:
 
 
 def test_user_upload_with_owner_is_valid() -> None:
-    user = get_user_model().objects.create_user(
-        username="listener",
-        password="strong-password",
-    )
+    user = create_user()
 
-    content = build_content(
+    content = build_listening_content(
         owner=user,
         source_type=(ListeningSourceType.USER_UPLOAD),
         content_type=(ListeningContentType.CUSTOM),
+        audio_stream_url="",
+        audio_file=SimpleUploadedFile(
+            "sample.mp3",
+            b"fake-audio-content",
+            content_type="audio/mpeg",
+        ),
         is_published=False,
     )
 
@@ -111,15 +74,12 @@ def test_user_upload_with_owner_is_valid() -> None:
 
 
 def test_external_url_requires_source_url() -> None:
-    user = get_user_model().objects.create_user(
-        username="listener",
-        password="strong-password",
-    )
+    user = create_user()
 
-    content = build_content(
+    content = build_listening_content(
         owner=user,
         source_type=(ListeningSourceType.EXTERNAL_URL),
-        audio_file=None,
+        content_type=(ListeningContentType.CUSTOM),
         source_url="",
         is_published=False,
     )
@@ -133,10 +93,10 @@ def test_external_url_requires_source_url() -> None:
 
 
 def test_invalid_practice_mode_is_rejected() -> None:
-    content = build_content(
+    content = build_listening_content(
         available_practice_modes=[
             "unsupported-mode",
-        ]
+        ],
     )
 
     with pytest.raises(
@@ -155,8 +115,68 @@ def test_audio_file_size_limit_matches_frontend_contract() -> None:
     with pytest.raises(
         ValidationError,
     ) as exc_info:
-        validate_audio_file_size(
-            oversized_file,
-        )
+        validate_audio_file_size(oversized_file)
 
     assert exc_info.value.code == "audio_file_too_large"
+
+
+def test_attempt_accepts_available_practice_mode() -> None:
+    user = create_user()
+    content = create_listening_content()
+
+    attempt = ListeningAttempt(
+        user=user,
+        content=content,
+        practice_mode=(ListeningPracticeMode.FULL_DICTATION),
+    )
+
+    attempt.full_clean()
+
+    assert attempt.status == ListeningAttemptStatus.DRAFT
+
+    assert attempt.current_position_seconds == Decimal("0")
+
+
+def test_attempt_rejects_unavailable_practice_mode() -> None:
+    user = create_user()
+
+    content = create_listening_content(
+        available_practice_modes=[
+            ListeningPracticeMode.SHADOWING,
+        ],
+    )
+
+    attempt = ListeningAttempt(
+        user=user,
+        content=content,
+        practice_mode=(ListeningPracticeMode.FULL_DICTATION),
+    )
+
+    with pytest.raises(
+        ValidationError,
+    ) as exc_info:
+        attempt.full_clean()
+
+    assert "practice_mode" in exc_info.value.message_dict
+
+
+def test_attempt_rejects_position_past_audio_duration() -> None:
+    user = create_user()
+
+    content = create_listening_content(
+        duration_seconds=60,
+    )
+
+    attempt = ListeningAttempt(
+        user=user,
+        content=content,
+        practice_mode=(ListeningPracticeMode.FULL_DICTATION),
+        current_position_seconds=(Decimal("61")),
+    )
+
+    with pytest.raises(
+        ValidationError,
+    ) as exc_info:
+        attempt.full_clean()
+
+    assert "current_position_seconds" in exc_info.value.message_dict

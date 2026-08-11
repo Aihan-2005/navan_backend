@@ -1,12 +1,21 @@
 from collections.abc import Mapping
 from typing import Any
 
-from django.db.models import Q, QuerySet
+from django.db.models import (
+    Exists,
+    OuterRef,
+    Q,
+    QuerySet,
+)
 
 from apps.listening.choices import (
+    ListeningAttemptStatus,
     ListeningContentStatus,
 )
-from apps.listening.models import ListeningContent
+from apps.listening.models import (
+    ListeningAttempt,
+    ListeningContent,
+)
 from apps.listening.validators import (
     MAX_PRACTICE_MODES,
 )
@@ -47,10 +56,38 @@ def _filter_by_practice_mode(
     practice_mode_filter = Q()
 
     for index in range(MAX_PRACTICE_MODES):
-        practice_mode_filter |= Q(**{(f"available_practice_modes__{index}"): practice_mode})
+        lookup = f"available_practice_modes__{index}"
+
+        practice_mode_filter |= Q(
+            **{
+                lookup: practice_mode,
+            }
+        )
 
     return queryset.filter(
         practice_mode_filter,
+    )
+
+
+def _with_user_progress(
+    queryset: QuerySet[ListeningContent],
+    user: object,
+) -> QuerySet[ListeningContent]:
+    if not getattr(
+        user,
+        "is_authenticated",
+        False,
+    ):
+        return queryset
+
+    completed_attempts = ListeningAttempt.objects.filter(
+        user=user,
+        content_id=OuterRef("pk"),
+        status=(ListeningAttemptStatus.COMPLETED),
+    )
+
+    return queryset.annotate(
+        is_completed=Exists(completed_attempts),
     )
 
 
@@ -61,27 +98,26 @@ def get_listening_contents(
 ) -> QuerySet[ListeningContent]:
     queryset = ListeningContent.objects.visible_to(user).defer("reference_transcript")
 
-    content_type = filters.get(
-        "contentType",
+    queryset = _with_user_progress(
+        queryset,
+        user,
     )
+
+    content_type = filters.get("contentType")
 
     if content_type:
         queryset = queryset.filter(
             content_type=content_type,
         )
 
-    source_type = filters.get(
-        "sourceType",
-    )
+    source_type = filters.get("sourceType")
 
     if source_type:
         queryset = queryset.filter(
             source_type=source_type,
         )
 
-    cefr_level = filters.get(
-        "cefrLevel",
-    )
+    cefr_level = filters.get("cefrLevel")
 
     if cefr_level:
         queryset = queryset.filter(
@@ -95,9 +131,7 @@ def get_listening_contents(
             accent=accent,
         )
 
-    content_status = filters.get(
-        "status",
-    )
+    content_status = filters.get("status")
 
     if content_status:
         queryset = queryset.filter(
@@ -106,7 +140,7 @@ def get_listening_contents(
 
     if "isFeatured" in filters:
         queryset = queryset.filter(
-            is_featured=filters["isFeatured"],
+            is_featured=(filters["isFeatured"]),
         )
 
     search = filters.get("search")
@@ -114,9 +148,7 @@ def get_listening_contents(
     if search:
         queryset = queryset.filter(Q(title__icontains=search) | Q(description__icontains=search))
 
-    practice_mode = filters.get(
-        "practiceMode",
-    )
+    practice_mode = filters.get("practiceMode")
 
     if practice_mode:
         queryset = _filter_by_practice_mode(
@@ -129,10 +161,8 @@ def get_listening_contents(
         "featured",
     )
 
-    ordering_fields = LISTENING_ORDERING_FIELDS[ordering]
-
     return queryset.order_by(
-        *ordering_fields,
+        *LISTENING_ORDERING_FIELDS[ordering],
     )
 
 
@@ -140,13 +170,22 @@ def get_listening_content_details(
     *,
     user: object,
 ) -> QuerySet[ListeningContent]:
-    return (
+    queryset = (
         ListeningContent.objects.visible_to(user)
         .filter(
-            status=ListeningContentStatus.READY,
+            status=(ListeningContentStatus.READY),
         )
-        .exclude(
-            audio_file="",
-            audio_stream_url="",
-        )
+        .playable()
     )
+
+    return _with_user_progress(
+        queryset,
+        user,
+    )
+
+
+def get_listening_attempts_for_user(
+    *,
+    user: object,
+) -> QuerySet[ListeningAttempt]:
+    return ListeningAttempt.objects.for_user(user).select_related("content")

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,10 +14,14 @@ from django.db import models
 from django.db.models import Q
 
 from .choices import (
+    LISTENING_ATTEMPT_EDITABLE_STATUSES,
     CefrLevel,
     ListeningAccent,
+    ListeningAnswerSource,
+    ListeningAttemptStatus,
     ListeningContentStatus,
     ListeningContentType,
+    ListeningPracticeMode,
     ListeningSourceType,
 )
 from .validators import (
@@ -26,6 +31,7 @@ from .validators import (
 )
 
 MAX_AUDIO_DURATION_SECONDS = 20 * 60
+MAX_TRANSCRIPT_LENGTH = 20_000
 
 ALLOWED_AUDIO_EXTENSIONS = (
     "mp3",
@@ -47,11 +53,15 @@ def listening_audio_upload_to(
     return f"listening/audio/{owner_directory}/{instance.id}{extension}"
 
 
-class ListeningContentQuerySet(models.QuerySet):
+class ListeningContentQuerySet(
+    models.QuerySet,
+):
     def published(
         self,
     ) -> "ListeningContentQuerySet":
-        return self.filter(is_published=True)
+        return self.filter(
+            is_published=True,
+        )
 
     def ready(
         self,
@@ -60,19 +70,35 @@ class ListeningContentQuerySet(models.QuerySet):
             status=ListeningContentStatus.READY,
         )
 
+    def playable(
+        self,
+    ) -> "ListeningContentQuerySet":
+        return self.exclude(
+            audio_file="",
+            audio_stream_url="",
+        )
+
     def visible_to(
         self,
         user: object,
     ) -> "ListeningContentQuerySet":
         visibility_filter = Q(
-            source_type=ListeningSourceType.PLATFORM,
+            source_type=(ListeningSourceType.PLATFORM),
             is_published=True,
         )
 
-        if getattr(user, "is_authenticated", False):
-            visibility_filter |= Q(owner=user)
+        if getattr(
+            user,
+            "is_authenticated",
+            False,
+        ):
+            visibility_filter |= Q(
+                owner=user,
+            )
 
-        return self.filter(visibility_filter)
+        return self.filter(
+            visibility_filter,
+        )
 
 
 class ListeningContent(models.Model):
@@ -90,8 +116,13 @@ class ListeningContent(models.Model):
         blank=True,
     )
 
-    title = models.CharField(max_length=120)
-    description = models.TextField(blank=True)
+    title = models.CharField(
+        max_length=120,
+    )
+
+    description = models.TextField(
+        blank=True,
+    )
 
     content_type = models.CharField(
         max_length=20,
@@ -118,7 +149,7 @@ class ListeningContent(models.Model):
     status = models.CharField(
         max_length=16,
         choices=ListeningContentStatus.choices,
-        default=ListeningContentStatus.PROCESSING,
+        default=(ListeningContentStatus.PROCESSING),
     )
 
     transcription_language = models.CharField(
@@ -126,13 +157,15 @@ class ListeningContent(models.Model):
         default="en",
         validators=[
             RegexValidator(
-                regex=r"^[a-z]{2}(?:-[A-Z]{2})?$",
+                regex=(
+                    r"^[a-z]{2}"
+                    r"(?:-[A-Z]{2})?$"
+                ),
                 message=("Use a language code such as en or en-US."),
             )
         ],
     )
 
-    # فایل صوتی ذخیره‌شده در storage پروژه
     audio_file = models.FileField(
         upload_to=listening_audio_upload_to,
         max_length=255,
@@ -145,13 +178,11 @@ class ListeningContent(models.Model):
         ],
     )
 
-    # لینک قابل پخش؛ برای CDN یا Object Storage
     audio_stream_url = models.URLField(
         max_length=2048,
         blank=True,
     )
 
-    # لینکی که محتوای خارجی از آن import شده است
     source_url = models.URLField(
         max_length=2048,
         blank=True,
@@ -176,19 +207,25 @@ class ListeningContent(models.Model):
     )
 
     estimated_practice_minutes = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1)],
+        validators=[
+            MinValueValidator(1),
+        ],
     )
 
     average_words_per_minute = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
-        validators=[MinValueValidator(1)],
+        validators=[
+            MinValueValidator(1),
+        ],
     )
 
     speaker_count = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
-        validators=[MinValueValidator(1)],
+        validators=[
+            MinValueValidator(1),
+        ],
     )
 
     topics = models.JSONField(
@@ -215,7 +252,9 @@ class ListeningContent(models.Model):
 
     available_practice_modes = models.JSONField(
         default=list,
-        validators=[PracticeModesValidator()],
+        validators=[
+            PracticeModesValidator(),
+        ],
     )
 
     instructions = models.JSONField(
@@ -242,11 +281,11 @@ class ListeningContent(models.Model):
 
     minimum_transcript_words = models.PositiveSmallIntegerField(
         default=20,
-        validators=[MinValueValidator(1)],
+        validators=[
+            MinValueValidator(1),
+        ],
     )
 
-    # پاسخ صحیح برای مقایسه با Transcript کاربر
-    # این فیلد مستقیم به فرانت ارسال نمی‌شود.
     reference_transcript = models.TextField(
         blank=True,
     )
@@ -315,7 +354,7 @@ class ListeningContent(models.Model):
                 condition=Q(
                     estimated_practice_minutes__gt=0,
                 ),
-                name="listen_practice_minutes_gt_0",
+                name=("listen_practice_minutes_gt_0"),
             ),
             models.CheckConstraint(
                 condition=(
@@ -372,6 +411,185 @@ class ListeningContent(models.Model):
 
         if self.is_published and self.source_type != ListeningSourceType.PLATFORM:
             errors["is_published"] = "Only platform content can be published."
+
+        if errors:
+            raise ValidationError(errors)
+
+
+class ListeningAttemptQuerySet(
+    models.QuerySet,
+):
+    def for_user(
+        self,
+        user: object,
+    ) -> "ListeningAttemptQuerySet":
+        return self.filter(user=user)
+
+    def editable(
+        self,
+    ) -> "ListeningAttemptQuerySet":
+        return self.filter(
+            status__in=(LISTENING_ATTEMPT_EDITABLE_STATUSES),
+        )
+
+    def completed(
+        self,
+    ) -> "ListeningAttemptQuerySet":
+        return self.filter(
+            status=(ListeningAttemptStatus.COMPLETED),
+        )
+
+
+class ListeningAttempt(models.Model):
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="listening_attempts",
+    )
+
+    content = models.ForeignKey(
+        ListeningContent,
+        on_delete=models.CASCADE,
+        related_name="attempts",
+    )
+
+    practice_mode = models.CharField(
+        max_length=24,
+        choices=ListeningPracticeMode.choices,
+    )
+
+    answer_source = models.CharField(
+        max_length=16,
+        choices=ListeningAnswerSource.choices,
+        default=ListeningAnswerSource.TYPED,
+    )
+
+    transcript = models.TextField(
+        blank=True,
+        max_length=MAX_TRANSCRIPT_LENGTH,
+    )
+
+    current_position_seconds = models.DecimalField(
+        max_digits=8,
+        decimal_places=3,
+        default=Decimal("0"),
+        validators=[
+            MinValueValidator(Decimal("0")),
+        ],
+    )
+
+    playback_rate = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        validators=[
+            MinValueValidator(Decimal("0.50")),
+            MaxValueValidator(Decimal("2.00")),
+        ],
+    )
+
+    status = models.CharField(
+        max_length=24,
+        choices=ListeningAttemptStatus.choices,
+        default=ListeningAttemptStatus.DRAFT,
+    )
+
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    objects = ListeningAttemptQuerySet.as_manager()
+
+    class Meta:
+        db_table = "listening_attempts"
+
+        ordering = ("-updated_at",)
+
+        indexes = [
+            models.Index(
+                fields=(
+                    "user",
+                    "status",
+                    "updated_at",
+                ),
+                name="listen_attempt_user_idx",
+            ),
+            models.Index(
+                fields=(
+                    "user",
+                    "content",
+                    "updated_at",
+                ),
+                name="listen_attempt_content_idx",
+            ),
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(current_position_seconds__gte=0),
+                name=("listen_attempt_position_gte_0"),
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(playback_rate__gte=(Decimal("0.50")))
+                    & Q(playback_rate__lte=(Decimal("2.00")))
+                ),
+                name="listen_attempt_rate_valid",
+            ),
+            models.UniqueConstraint(
+                fields=(
+                    "user",
+                    "content",
+                    "practice_mode",
+                ),
+                condition=Q(status__in=(LISTENING_ATTEMPT_EDITABLE_STATUSES)),
+                name="listen_one_editable_attempt",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} - {self.content.title} - {self.practice_mode}"
+
+    @property
+    def is_editable(self) -> bool:
+        return self.status in LISTENING_ATTEMPT_EDITABLE_STATUSES
+
+    def clean(self) -> None:
+        super().clean()
+
+        errors: dict[str, str] = {}
+
+        if self.content_id:
+            if self.practice_mode not in (self.content.available_practice_modes):
+                errors["practice_mode"] = "This practice mode is not available for the content."
+
+            if self.current_position_seconds > self.content.duration_seconds:
+                errors["current_position_seconds"] = (
+                    "Playback position cannot be greater than the content duration."
+                )
+
+            if self.content.owner_id is not None and self.content.owner_id != self.user_id:
+                errors["content"] = "Users cannot create attempts for another user's content."
 
         if errors:
             raise ValidationError(errors)

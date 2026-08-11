@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from .models import ListeningContent
+from .models import (
+    ListeningAttempt,
+    ListeningContent,
+)
 
 
 @admin.register(ListeningContent)
@@ -41,7 +44,8 @@ class ListeningContentAdmin(
         "updated_at",
     )
 
-    autocomplete_fields = ("owner",)
+    raw_id_fields = ("owner",)
+
     ordering = ("-updated_at",)
 
     fieldsets = (
@@ -110,3 +114,51 @@ class ListeningContentAdmin(
             },
         ),
     )
+
+
+@admin.register(ListeningAttempt)
+class ListeningAttemptAdmin(
+    admin.ModelAdmin,
+):
+    list_display = (
+        "id",
+        "user",
+        "content",
+        "practice_mode",
+        "answer_source",
+        "status",
+        "current_position_seconds",
+        "submitted_at",
+        "completed_at",
+        "updated_at",
+    )
+
+    list_filter = (
+        "practice_mode",
+        "answer_source",
+        "status",
+    )
+
+    search_fields = (
+        "user__identifier",
+        "content__title",
+        "transcript",
+    )
+
+    readonly_fields = (
+        "id",
+        "created_at",
+        "updated_at",
+    )
+
+    raw_id_fields = (
+        "user",
+        "content",
+    )
+
+    list_select_related = (
+        "user",
+        "content",
+    )
+
+    ordering = ("-updated_at",)

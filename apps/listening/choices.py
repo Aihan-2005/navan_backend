@@ -23,16 +23,37 @@ class ListeningContentType(models.TextChoices):
 
 class ListeningSourceType(models.TextChoices):
     PLATFORM = "platform", "Platform"
-    USER_UPLOAD = "user_upload", "User upload"
-    EXTERNAL_URL = "external_url", "External URL"
+    USER_UPLOAD = (
+        "user_upload",
+        "User upload",
+    )
+    EXTERNAL_URL = (
+        "external_url",
+        "External URL",
+    )
 
 
 class ListeningPracticeMode(models.TextChoices):
-    FULL_DICTATION = "full_dictation", "Full dictation"
-    GUIDED_DICTATION = "guided_dictation", "Guided dictation"
-    FILL_IN_THE_BLANK = "fill_in_the_blank", "Fill in the blank"
-    COMPREHENSION = "comprehension", "Comprehension"
-    SHADOWING = "shadowing", "Shadowing"
+    FULL_DICTATION = (
+        "full_dictation",
+        "Full dictation",
+    )
+    GUIDED_DICTATION = (
+        "guided_dictation",
+        "Guided dictation",
+    )
+    FILL_IN_THE_BLANK = (
+        "fill_in_the_blank",
+        "Fill in the blank",
+    )
+    COMPREHENSION = (
+        "comprehension",
+        "Comprehension",
+    )
+    SHADOWING = (
+        "shadowing",
+        "Shadowing",
+    )
 
 
 class ListeningAccent(models.TextChoices):
@@ -44,7 +65,42 @@ class ListeningAccent(models.TextChoices):
     UNKNOWN = "unknown", "Unknown"
 
 
-class ListeningContentStatus(models.TextChoices):
+class ListeningContentStatus(
+    models.TextChoices,
+):
     READY = "ready", "Ready"
     PROCESSING = "processing", "Processing"
-    COMING_SOON = "coming_soon", "Coming soon"
+    COMING_SOON = (
+        "coming_soon",
+        "Coming soon",
+    )
+
+
+class ListeningAnswerSource(
+    models.TextChoices,
+):
+    TYPED = "typed", "Typed"
+    DOCUMENT = "document", "Document"
+    IMAGE = "image", "Image"
+
+
+class ListeningAttemptStatus(
+    models.TextChoices,
+):
+    DRAFT = "draft", "Draft"
+    EXTRACTING_NOTES = (
+        "extracting_notes",
+        "Extracting notes",
+    )
+    READY = "ready", "Ready"
+    SUBMITTED = "submitted", "Submitted"
+    ANALYZING = "analyzing", "Analyzing"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+
+
+LISTENING_ATTEMPT_EDITABLE_STATUSES = (
+    ListeningAttemptStatus.DRAFT,
+    ListeningAttemptStatus.EXTRACTING_NOTES,
+    ListeningAttemptStatus.READY,
+)
