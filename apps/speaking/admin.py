@@ -1,7 +1,6 @@
-# Register your models here.
 from django.contrib import admin
 
-from apps.speaking.models import SpeakingExercise, SpeakingSession, SpeakingTag, SpeakingTurn
+from apps.speaking.models import SpeakingEvaluation, SpeakingExercise, SpeakingSession, SpeakingTag, SpeakingTurn
 
 
 @admin.register(SpeakingTag)
@@ -23,8 +22,14 @@ class SpeakingTurnInline(admin.TabularInline):
     readonly_fields = ["created_at"]
 
 
+class SpeakingEvaluationInline(admin.StackedInline):
+    model = SpeakingEvaluation
+    extra = 0
+    readonly_fields = ["created_at", "completed_at"]
+
+
 @admin.register(SpeakingSession)
 class SpeakingSessionAdmin(admin.ModelAdmin):
-    list_display = ["id", "user", "exercise", "status", "started_at", "fluency_score"]
+    list_display = ["id", "user", "exercise", "status", "started_at"]
     list_filter = ["status"]
-    inlines = [SpeakingTurnInline]
+    inlines = [SpeakingTurnInline, SpeakingEvaluationInline]
