@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.speaking.models import SpeakingExercise, SpeakingSession, SpeakingTag, SpeakingTurn
+from apps.speaking.models import SpeakingEvaluation, SpeakingExercise, SpeakingSession, SpeakingTag, SpeakingTurn
 
 
 class SpeakingTagSerializer(serializers.ModelSerializer):
@@ -10,8 +10,6 @@ class SpeakingTagSerializer(serializers.ModelSerializer):
 
 
 class SpeakingExerciseListSerializer(serializers.ModelSerializer):
-    """Matches the catalog cards on the speaking page."""
-
     tags = SpeakingTagSerializer(many=True, read_only=True)
 
     class Meta:
@@ -26,8 +24,8 @@ class SpeakingTurnSerializer(serializers.ModelSerializer):
     class Meta:
         model = SpeakingTurn
         fields = [
-            "id", "speaker", "order", "text", "audio_file",
-            "audio_duration_seconds", "transcription_status", "created_at",
+            "id", "speaker", "order", "text", "audio_file", "audio_format",
+            "audio_size_bytes", "audio_duration_seconds", "transcription_status", "created_at",
         ]
         read_only_fields = ["id", "text", "transcription_status", "created_at"]
 
@@ -37,11 +35,7 @@ class SpeakingSessionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SpeakingSession
-        fields = [
-            "id", "exercise", "exercise_title", "status", "started_at",
-            "completed_at", "duration_seconds", "fluency_score",
-            "pronunciation_score", "grammar_score",
-        ]
+        fields = ["id", "exercise", "exercise_title", "status", "started_at", "completed_at", "duration_seconds"]
         read_only_fields = fields
 
 
@@ -49,7 +43,7 @@ class SpeakingSessionDetailSerializer(SpeakingSessionListSerializer):
     turns = SpeakingTurnSerializer(many=True, read_only=True)
 
     class Meta(SpeakingSessionListSerializer.Meta):
-        fields = SpeakingSessionListSerializer.Meta.fields + ["feedback", "turns"]
+        fields = SpeakingSessionListSerializer.Meta.fields + ["turns"]
 
 
 class SpeakingSessionCreateSerializer(serializers.ModelSerializer):
@@ -64,10 +58,15 @@ class SpeakingSessionCreateSerializer(serializers.ModelSerializer):
         return exercise
 
 
+MAX_RECORDING_SECONDS = 180 
+
+
 class SpeakingTurnCreateSerializer(serializers.ModelSerializer):
+    audio_duration_seconds = serializers.FloatField(required=True)
+
     class Meta:
         model = SpeakingTurn
-        fields = ["id", "audio_file"]
+        fields = ["id", "audio_file", "audio_duration_seconds"]
         read_only_fields = ["id"]
 
     def validate_audio_file(self, audio_file):
@@ -75,6 +74,20 @@ class SpeakingTurnCreateSerializer(serializers.ModelSerializer):
         if audio_file.size > max_size_mb * 1024 * 1024:
             raise serializers.ValidationError(f"Audio file must be under {max_size_mb}MB.")
         return audio_file
+
+    def validate_audio_duration_seconds(self, duration):
+        if duration > MAX_RECORDING_SECONDS:
+            raise serializers.ValidationError(
+                f"Recording exceeds the maximum of {MAX_RECORDING_SECONDS} seconds."
+            )
+        return duration
+
+
+class SpeakingEvaluationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpeakingEvaluation
+        fields = ["id", "status", "score", "analysis", "error_message", "created_at", "completed_at"]
+        read_only_fields = fields
 
 
 class SpeakingStatsSerializer(serializers.Serializer):

@@ -18,7 +18,7 @@ from apps.speaking.serializers import (
     SpeakingTurnSerializer,
 )
 
-from apps.speaking.services.assessment import get_assessment_provider
+from apps.speaking.services.evaluation import get_assessment_provider
 from apps.speaking.services.transcription import get_transcription_provider
 
 
