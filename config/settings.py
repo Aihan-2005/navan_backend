@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "apps.accounts.apps.AccountsConfig",
     "apps.speaking.apps.SpeakingConfig",
     "apps.listening.apps.ListeningConfig",
+    "apps.reading.apps.ReadingConfig",
 ]
 
 
