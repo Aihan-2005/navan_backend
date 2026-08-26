@@ -1,6 +1,5 @@
-from django.utils import timezone
-
 from celery import shared_task
+from django.utils import timezone
 
 from apps.speaking.models import SpeakingEvaluation, SpeakingSession, SpeakingTurn
 from apps.speaking.services.dialogue import get_dialogue_provider
@@ -21,6 +20,7 @@ def transcribe_turn_task(self, turn_id):
     try:
         provider = get_transcription_provider()
         result = provider.transcribe(turn.audio_file)
+
         turn.text = result.text
         turn.transcription_raw = result.raw
         turn.transcription_status = SpeakingTurn.TranscriptionStatus.COMPLETED
@@ -28,7 +28,7 @@ def transcribe_turn_task(self, turn_id):
     except Exception as exc:
         turn.transcription_status = SpeakingTurn.TranscriptionStatus.FAILED
         turn.save(update_fields=["transcription_status"])
-        raise self.retry(exc=exc, countdown=5)
+        raise self.retry(exc=exc, countdown=5) from exc
 
     # Only chain to AI reply generation once the transcript is finalized —
     # never on partial/in-progress transcripts, per the agreed design.
@@ -38,10 +38,12 @@ def transcribe_turn_task(self, turn_id):
 @shared_task(bind=True, max_retries=3)
 def generate_ai_turn_task(self, session_id):
     session = SpeakingSession.objects.prefetch_related("turns").get(id=session_id)
+
     dialogue = get_dialogue_provider()
     result = dialogue.generate_next_turn(session)
 
     next_order = session.turns.count()
+
     SpeakingTurn.objects.create(
         session=session,
         speaker=SpeakingTurn.Speaker.AI,
@@ -65,14 +67,23 @@ def evaluate_session_task(self, evaluation_id):
     try:
         provider = get_evaluation_provider()
         result = provider.evaluate_session(evaluation.session)
+
         evaluation.score = result.score
         evaluation.analysis = result.analysis
         evaluation.raw_response = result.raw
         evaluation.status = SpeakingEvaluation.Status.COMPLETED
         evaluation.completed_at = timezone.now()
-        evaluation.save(update_fields=["score", "analysis", "raw_response", "status", "completed_at"])
+        evaluation.save(
+            update_fields=[
+                "score",
+                "analysis",
+                "raw_response",
+                "status",
+                "completed_at",
+            ]
+        )
     except Exception as exc:
         evaluation.status = SpeakingEvaluation.Status.FAILED
         evaluation.error_message = str(exc)
         evaluation.save(update_fields=["status", "error_message"])
-        raise self.retry(exc=exc, countdown=5)
+        raise self.retry(exc=exc, countdown=5) from exc

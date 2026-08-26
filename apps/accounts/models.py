@@ -1,12 +1,13 @@
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
-from .managers import UserManager
-from datetime import timedelta
-from django.conf import settings
-from django.contrib.auth.hashers import check_password, make_password
-from django.db import models
 from django.utils import timezone
+
+from .managers import UserManager
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -23,6 +24,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(
         default=False,
     )
+
     objects = UserManager()
 
     USERNAME_FIELD = "identifier"
@@ -41,18 +43,18 @@ class PasswordResetOTP(models.Model):
         on_delete=models.CASCADE,
         related_name="password_reset_otp",
     )
-
     code_hash = models.CharField(
         max_length=128,
     )
-
     failed_attempts = models.PositiveSmallIntegerField(
         default=0,
     )
-
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
+
+    def __str__(self) -> str:
+        return f"Password reset OTP for {self.user.identifier}"
 
     def set_code(self, raw_code: str) -> None:
         self.code_hash = make_password(raw_code)
@@ -78,6 +80,3 @@ class PasswordResetOTP(models.Model):
     @property
     def is_usable(self) -> bool:
         return not self.is_expired and not self.is_locked
-
-    def __str__(self) -> str:
-        return f"Password reset OTP for " f"{self.user.identifier}"

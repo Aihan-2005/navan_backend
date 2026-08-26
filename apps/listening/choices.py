@@ -34,6 +34,10 @@ class ListeningSourceType(models.TextChoices):
 
 
 class ListeningPracticeMode(models.TextChoices):
+    LISTEN_ONLY = (
+        "listen_only",
+        "Listen only",
+    )
     FULL_DICTATION = (
         "full_dictation",
         "Full dictation",
@@ -88,14 +92,29 @@ class ListeningAttemptStatus(
     models.TextChoices,
 ):
     DRAFT = "draft", "Draft"
+
     EXTRACTING_NOTES = (
         "extracting_notes",
         "Extracting notes",
     )
+
     READY = "ready", "Ready"
-    SUBMITTED = "submitted", "Submitted"
-    ANALYZING = "analyzing", "Analyzing"
-    COMPLETED = "completed", "Completed"
+
+    SUBMITTED = (
+        "submitted",
+        "Submitted",
+    )
+
+    ANALYZING = (
+        "analyzing",
+        "Analyzing",
+    )
+
+    COMPLETED = (
+        "completed",
+        "Completed",
+    )
+
     FAILED = "failed", "Failed"
 
 

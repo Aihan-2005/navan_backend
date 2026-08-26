@@ -1,150 +1,433 @@
 import uuid
 
 from django.conf import settings
+from django.core.validators import (
+    MaxValueValidator,
+    MinValueValidator,
+)
 from django.db import models
+
+from apps.speaking.choices import (
+    CefrLevel,
+    SpeakingCoachStyle,
+    SpeakingEvaluationStatus,
+    SpeakingMode,
+    SpeakingSessionStatus,
+    SpeakingTranscriptionStatus,
+    SpeakingTurnSpeaker,
+)
+from apps.speaking.validators import (
+    StringListValidator,
+)
 
 
 class SpeakingTag(models.Model):
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+    )
 
-    def __str__(self):
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
         return self.name
 
 
 class SpeakingExercise(models.Model):
-    class ExerciseType(models.TextChoices):
-        ROLEPLAY = "roleplay", "Roleplay"
-        FREEFORM = "freeform", "Freeform"
-        STORYTELLING = "storytelling", "Storytelling"
-        SHADOWING = "shadowing", "Shadowing"
-        PRONUNCIATION = "pronunciation", "Pronunciation Drill"
+    """
+    A reusable speaking scenario/exercise.
 
-    class CefrLevel(models.TextChoices):
-        A1 = "A1", "A1"
-        A2 = "A2", "A2"
-        B1 = "B1", "B1"
-        B2 = "B2", "B2"
-        C1 = "C1", "C1"
-        C2 = "C2", "C2"
+    UUID is the internal database identity.
+    `slug` is the stable public identifier
+    exposed to frontend routes.
+    """
 
-    class CoachingStyle(models.TextChoices):
-        SUPPORTIVE = "supportive", "حمایتی"
-        BALANCED = "balanced", "متعادل"
-        STRICT = "strict", "سخت‌گیرانه"
+    # Compatibility aliases for older code.
+    ExerciseType = SpeakingMode
+    CefrLevel = CefrLevel
+    CoachingStyle = SpeakingCoachStyle
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=200)
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    slug = models.SlugField(
+        max_length=120,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+
+    title = models.CharField(
+        max_length=200,
+    )
+
     description = models.TextField()
-    exercise_type = models.CharField(max_length=20, choices=ExerciseType.choices)
-    cefr_level = models.CharField(max_length=2, choices=CefrLevel.choices)
-    coaching_style = models.CharField(max_length=20, choices=CoachingStyle.choices)
+
+    exercise_type = models.CharField(
+        max_length=24,
+        choices=SpeakingMode.choices,
+    )
+
+    cefr_level = models.CharField(
+        max_length=2,
+        choices=CefrLevel.choices,
+    )
+
+    coaching_style = models.CharField(
+        max_length=20,
+        choices=SpeakingCoachStyle.choices,
+    )
+
     estimated_minutes = models.PositiveSmallIntegerField()
-    tags = models.ManyToManyField(SpeakingTag, blank=True, related_name="exercises")
-    is_recommended = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-    order = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
+    prompt = models.TextField(
+        blank=True,
+        help_text=("Internal scenario instructions used to guide the speaking task."),
+    )
+
+    ai_role = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text=("Role and behavior expected from the AI conversation partner."),
+    )
+
+    starter_phrases = models.JSONField(
+        default=list,
+        blank=True,
+        validators=[
+            StringListValidator(
+                max_items=12,
+                max_item_length=180,
+            )
+        ],
+    )
+
+    tags = models.ManyToManyField(
+        SpeakingTag,
+        blank=True,
+        related_name="exercises",
+    )
+
+    is_recommended = models.BooleanField(
+        default=False,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
 
     class Meta:
-        ordering = ["order", "-created_at"]
-        indexes = [
-            models.Index(fields=["exercise_type", "is_active"]),
-            models.Index(fields=["cefr_level"]),
+        ordering = [
+            "order",
+            "-created_at",
         ]
 
-    def __str__(self):
+        indexes = [
+            models.Index(
+                fields=[
+                    "exercise_type",
+                    "is_active",
+                ]
+            ),
+            models.Index(fields=["cefr_level"]),
+            models.Index(
+                fields=[
+                    "is_active",
+                    "is_recommended",
+                ]
+            ),
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(estimated_minutes__gte=1),
+                name=("speaking_exercise_minutes_gte_1"),
+            )
+        ]
+
+    def __str__(self) -> str:
         return f"{self.title} ({self.cefr_level})"
 
 
 class SpeakingSession(models.Model):
-    """Session-level state only. Evaluation result now lives on SpeakingEvaluation."""
+    """
+    A single learner speaking session.
+    """
 
-    class Status(models.TextChoices):
-        IN_PROGRESS = "in_progress", "In Progress"
-        COMPLETED = "completed", "Completed"
-        ABANDONED = "abandoned", "Abandoned"
+    Status = SpeakingSessionStatus
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="speaking_sessions"
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
     )
-    exercise = models.ForeignKey(SpeakingExercise, on_delete=models.PROTECT, related_name="sessions")
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.IN_PROGRESS)
-    started_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    duration_seconds = models.PositiveIntegerField(null=True, blank=True)
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="speaking_sessions",
+    )
+
+    exercise = models.ForeignKey(
+        SpeakingExercise,
+        on_delete=models.PROTECT,
+        related_name="sessions",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=(SpeakingSessionStatus.choices),
+        default=(SpeakingSessionStatus.IN_PROGRESS),
+    )
+
+    started_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    duration_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-started_at"]
+
         indexes = [
-            models.Index(fields=["user", "status"]),
-            models.Index(fields=["user", "started_at"]),
+            models.Index(
+                fields=[
+                    "user",
+                    "status",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "user",
+                    "started_at",
+                ]
+            ),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.user_id} · {self.exercise.title} · {self.status}"
 
 
 class SpeakingTurn(models.Model):
-    """One turn (AI prompt or user reply). Raw transcript lives here, separate
-    from the AI's evaluation"""
+    """
+    One conversational turn.
 
-    class Speaker(models.TextChoices):
-        AI = "ai", "AI"
-        USER = "user", "User"
+    User turns may contain audio and require
+    transcription. AI turns contain text only.
+    """
 
-    class TranscriptionStatus(models.TextChoices):
-        NOT_APPLICABLE = "n/a", "N/A"
-        QUEUED = "queued", "Queued"
-        PROCESSING = "processing", "Processing"
-        COMPLETED = "completed", "Completed"
-        FAILED = "failed", "Failed"
+    Speaker = SpeakingTurnSpeaker
+    TranscriptionStatus = SpeakingTranscriptionStatus
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(SpeakingSession, on_delete=models.CASCADE, related_name="turns")
-    speaker = models.CharField(max_length=10, choices=Speaker.choices)
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    session = models.ForeignKey(
+        SpeakingSession,
+        on_delete=models.CASCADE,
+        related_name="turns",
+    )
+
+    speaker = models.CharField(
+        max_length=10,
+        choices=SpeakingTurnSpeaker.choices,
+    )
+
     order = models.PositiveIntegerField()
-    text = models.TextField(blank=True)
 
-    audio_file = models.FileField(upload_to="speaking/audio/%Y/%m/", null=True, blank=True)
-    audio_format = models.CharField(max_length=10, blank=True)       # e.g. "m4a", "webm"
-    audio_size_bytes = models.PositiveIntegerField(null=True, blank=True)
-    audio_duration_seconds = models.FloatField(null=True, blank=True)
+    text = models.TextField(
+        blank=True,
+    )
+
+    audio_file = models.FileField(
+        upload_to="speaking/audio/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+
+    audio_format = models.CharField(
+        max_length=10,
+        blank=True,
+    )
+
+    audio_size_bytes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+
+    audio_duration_seconds = models.FloatField(
+        null=True,
+        blank=True,
+    )
 
     transcription_status = models.CharField(
-        max_length=20, choices=TranscriptionStatus.choices, default=TranscriptionStatus.NOT_APPLICABLE
+        max_length=20,
+        choices=(SpeakingTranscriptionStatus.choices),
+        default=(SpeakingTranscriptionStatus.NOT_APPLICABLE),
     )
-    transcription_raw = models.JSONField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+
+    transcription_raw = models.JSONField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
 
     class Meta:
-        ordering = ["session", "order"]
-        unique_together = [["session", "order"]]
+        ordering = [
+            "session",
+            "order",
+        ]
 
-    def __str__(self):
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "session",
+                    "order",
+                ],
+                name=("speaking_unique_session_turn_order"),
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(audio_duration_seconds__isnull=True)
+                    | (
+                        models.Q(audio_duration_seconds__gt=0)
+                        & models.Q(audio_duration_seconds__lte=180)
+                    )
+                ),
+                name=("speaking_turn_duration_valid"),
+            ),
+        ]
+
+    def __str__(self) -> str:
         return f"{self.session_id} · turn {self.order} · {self.speaker}"
 
 
 class SpeakingEvaluation(models.Model):
+    """
+    Persisted evaluation generated after
+    a completed speaking session.
+    """
 
-    class Status(models.TextChoices):
-        QUEUED = "queued", "Queued"
-        PROCESSING = "processing", "Processing"
-        COMPLETED = "completed", "Completed"
-        FAILED = "failed", "Failed"
+    Status = SpeakingEvaluationStatus
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.OneToOneField(SpeakingSession, on_delete=models.CASCADE, related_name="evaluation")
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
 
-    score = models.FloatField(null=True, blank=True)
-    analysis = models.JSONField(null=True, blank=True)
-    raw_response = models.JSONField(null=True, blank=True)
-    error_message = models.TextField(blank=True)
+    session = models.OneToOneField(
+        SpeakingSession,
+        on_delete=models.CASCADE,
+        related_name="evaluation",
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=(SpeakingEvaluationStatus.choices),
+        default=(SpeakingEvaluationStatus.QUEUED),
+    )
 
-    def __str__(self):
+    score = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100),
+        ],
+    )
+
+    fluency_score = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100),
+        ],
+    )
+
+    pronunciation_score = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100),
+        ],
+    )
+
+    grammar_score = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100),
+        ],
+    )
+
+    vocabulary_score = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100),
+        ],
+    )
+
+    analysis = models.JSONField(
+        null=True,
+        blank=True,
+    )
+
+    raw_response = models.JSONField(
+        null=True,
+        blank=True,
+    )
+
+    error_message = models.TextField(
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
         return f"Evaluation for {self.session_id} ({self.status})"

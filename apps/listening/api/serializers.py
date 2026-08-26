@@ -114,12 +114,12 @@ class ListeningContentSummarySerializer(
     )
 
     estimatedPracticeMinutes = serializers.IntegerField(
-        source=("estimated_practice_minutes"),
+        source="estimated_practice_minutes",
         read_only=True,
     )
 
     averageWordsPerMinute = serializers.IntegerField(
-        source=("average_words_per_minute"),
+        source="average_words_per_minute",
         read_only=True,
         allow_null=True,
     )
@@ -154,9 +154,13 @@ class ListeningContentSummarySerializer(
         read_only=True,
     )
 
-    isCompleted = serializers.SerializerMethodField()
+    isCompleted = serializers.SerializerMethodField(
+        method_name="get_is_completed",
+    )
 
-    bestAccuracyScore = serializers.SerializerMethodField()
+    bestAccuracyScore = serializers.SerializerMethodField(
+        method_name=("get_best_accuracy_score"),
+    )
 
     class Meta:
         model = ListeningContent
@@ -223,12 +227,16 @@ class ListeningContentSummarySerializer(
 class ListeningContentDetailSerializer(
     ListeningContentSummarySerializer,
 ):
-    audioUrl = serializers.SerializerMethodField()
+    audioUrl = serializers.SerializerMethodField(
+        method_name="get_audio_url",
+    )
 
-    coverImageUrl = serializers.SerializerMethodField()
+    coverImageUrl = serializers.SerializerMethodField(
+        method_name="get_cover_image_url",
+    )
 
     transcriptionLanguage = serializers.CharField(
-        source=("transcription_language"),
+        source="transcription_language",
         read_only=True,
     )
 
@@ -244,7 +252,7 @@ class ListeningContentDetailSerializer(
     )
 
     minimumTranscriptWords = serializers.IntegerField(
-        source=("minimum_transcript_words"),
+        source="minimum_transcript_words",
         read_only=True,
     )
 
@@ -253,7 +261,9 @@ class ListeningContentDetailSerializer(
         read_only=True,
     )
 
-    audioAttribution = serializers.SerializerMethodField()
+    audioAttribution = serializers.SerializerMethodField(
+        method_name=("get_audio_attribution"),
+    )
 
     class Meta(ListeningContentSummarySerializer.Meta):
         fields = ListeningContentSummarySerializer.Meta.fields + (

@@ -1,5 +1,8 @@
 from django.urls import path
 
+from apps.listening.api.overview_views import (
+    ListeningOverviewAPIView,
+)
 from apps.listening.api.views import (
     ListeningAttemptDraftAPIView,
     ListeningAttemptStartAPIView,
@@ -11,6 +14,11 @@ app_name = "listening"
 
 
 urlpatterns = [
+    path(
+        "overview",
+        ListeningOverviewAPIView.as_view(),
+        name="overview",
+    ),
     path(
         "contents",
         ListeningContentListAPIView.as_view(),
@@ -27,7 +35,7 @@ urlpatterns = [
         name="attempt-start",
     ),
     path(
-        ("attempts/<uuid:attempt_id>/draft"),
+        "attempts/<uuid:attempt_id>/draft",
         ListeningAttemptDraftAPIView.as_view(),
         name="attempt-draft",
     ),

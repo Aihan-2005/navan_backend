@@ -16,12 +16,8 @@ urlpatterns = [
         "api/v1/listening/",
         include("apps.listening.api.urls"),
     ),
-    path(
-        "api/v1/speaking/", 
-        include("apps.speaking.urls")
-    ),
+    path("api/v1/speaking/", include("apps.speaking.urls")),
 ]
-
 
 
 if settings.DEBUG:

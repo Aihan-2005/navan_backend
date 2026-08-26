@@ -1,24 +1,24 @@
 from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+
 from .serializers import (
-    RegisterSerializer,
     LoginSerializer,
+    PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
-    PasswordResetConfirmSerializer,
+    RegisterSerializer,
 )
 from .services import (
     ExpiredOTPError,
     InvalidOTPError,
     LockedOTPError,
-    verify_password_reset_otp,
     issue_tokens_for_user,
     request_password_reset,
     reset_user_password,
+    verify_password_reset_otp,
 )
 
 
@@ -82,9 +82,7 @@ class PasswordResetRequestView(APIView):
 
         request_password_reset(serializer.validated_data["identifier"])
 
-        return Response(
-            {"message": ("در صورت وجود حساب، " "کد بازیابی ارسال شده است.")}
-        )
+        return Response({"message": ("در صورت وجود حساب، کد بازیابی ارسال شده است.")})
 
 
 class PasswordResetVerifyView(APIView):
@@ -145,15 +143,18 @@ class PasswordResetConfirmView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 class TestAuthView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({
-            "message": "توکن معتبر است.",
-            "user": {
-                "id": request.user.id,
-                "name": request.user.name,
-                "identifier": request.user.identifier,
-            },
-        })
+        return Response(
+            {
+                "message": "توکن معتبر است.",
+                "user": {
+                    "id": request.user.id,
+                    "name": request.user.name,
+                    "identifier": request.user.identifier,
+                },
+            }
+        )

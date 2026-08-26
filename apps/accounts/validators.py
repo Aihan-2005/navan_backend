@@ -4,7 +4,6 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
-
 PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
 ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩"
 ENGLISH_DIGITS = "0123456789"
@@ -14,17 +13,13 @@ DIGIT_TRANSLATION_TABLE = str.maketrans(
     ENGLISH_DIGITS + ENGLISH_DIGITS,
 )
 
-IRANIAN_MOBILE_PATTERN = re.compile(
-    r"^\+989\d{9}$"
-)
+IRANIAN_MOBILE_PATTERN = re.compile(r"^\+989\d{9}$")
 
 
 def normalize_iranian_mobile(phone_number: str) -> str:
 
     phone_number = phone_number.strip()
-    phone_number = phone_number.translate(
-        DIGIT_TRANSLATION_TABLE
-    )
+    phone_number = phone_number.translate(DIGIT_TRANSLATION_TABLE)
     phone_number = re.sub(
         r"[\s()-]",
         "",
@@ -51,18 +46,14 @@ def normalize_iranian_mobile(phone_number: str) -> str:
 
 def validate_iranian_mobile(phone_number: str) -> None:
     if not IRANIAN_MOBILE_PATTERN.fullmatch(phone_number):
-        raise ValidationError(
-            "شماره موبایل ایرانی معتبر نیست."
-        )
+        raise ValidationError("شماره موبایل ایرانی معتبر نیست.")
 
 
 def normalize_identifier(identifier: str) -> str:
     identifier = identifier.strip()
 
     if "@" in identifier:
-        return BaseUserManager.normalize_email(
-            identifier
-        )
+        return BaseUserManager.normalize_email(identifier)
 
     return normalize_iranian_mobile(identifier)
 
@@ -72,9 +63,7 @@ def validate_identifier(identifier: str) -> None:
         try:
             validate_email(identifier)
         except ValidationError as exc:
-            raise ValidationError(
-                "ایمیل واردشده معتبر نیست."
-            ) from exc
+            raise ValidationError("ایمیل واردشده معتبر نیست.") from exc
 
         return
 

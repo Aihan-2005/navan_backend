@@ -25,8 +25,14 @@ class FakeEvaluationProvider(BaseEvaluationProvider):
             score=75.0,
             analysis=[
                 {"title": "Grammar", "content": "[fake] A couple of minor tense slips were noted."},
-                {"title": "Vocabulary", "content": "[fake] Try varying repeated words like 'good'."},
-                {"title": "Fluency", "content": "[fake] Speech was generally smooth with natural pausing."},
+                {
+                    "title": "Vocabulary",
+                    "content": "[fake] Try varying repeated words like 'good'.",
+                },
+                {
+                    "title": "Fluency",
+                    "content": "[fake] Speech was generally smooth with natural pausing.",
+                },
             ],
             raw={"provider": "fake"},
         )
