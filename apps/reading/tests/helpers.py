@@ -7,10 +7,18 @@ from django.core.files.uploadedfile import (
 )
 from django.test import override_settings
 
+from apps.reading.ai_client import (
+    AIUsage,
+    StructuredAIResult,
+)
 from apps.reading.models import (
     ReadingAnalysis,
     ReadingResource,
     UserReadingResource,
+)
+from apps.reading.schemas import (
+    ReadingOverview,
+    ReadingSectionAnalysis,
 )
 
 
@@ -125,3 +133,72 @@ def create_analysis(
         raise TypeError("Unsupported reading resource.")
 
     return ReadingAnalysis.objects.create(**kwargs)
+
+
+def build_overview_result() -> StructuredAIResult[ReadingOverview]:
+    overview = ReadingOverview.model_validate(
+        {
+            "detected_level": "B1",
+            "title_guess": "Test Book",
+            "summary_fa": "خلاصه تست",
+            "learning_objectives_fa": [
+                "هدف اول",
+                "هدف دوم",
+            ],
+            "difficulty_profile": {
+                "cefr_level": "B1",
+                "score": 5,
+                "sentence_complexity": ("medium"),
+                "grammar_complexity": ("medium"),
+                "notes_fa": "متوسط",
+            },
+            "vocabulary_profile": {
+                "cefr_level": "B1",
+                "density": "MEDIUM",
+                "notable_domains": [
+                    "general",
+                ],
+                "notes_fa": ("واژگان متوسط"),
+            },
+            "quality_profile": {
+                "readability": "GOOD",
+                "coherence": "GOOD",
+                "extraction_quality": ("GOOD"),
+                "warnings_fa": [],
+            },
+        }
+    )
+
+    return StructuredAIResult(
+        data=overview,
+        usage=AIUsage(
+            input_tokens=100,
+            output_tokens=50,
+            total_tokens=150,
+        ),
+        request_id=("req-overview-test"),
+    )
+
+
+def build_section_result(
+    *,
+    title: str = "Section 1",
+) -> StructuredAIResult[ReadingSectionAnalysis]:
+    section = ReadingSectionAnalysis.model_validate(
+        {
+            "title": title,
+            "summary_fa": ("خلاصه بخش تست"),
+            "paragraphs": [],
+            "quiz": [],
+        }
+    )
+
+    return StructuredAIResult(
+        data=section,
+        usage=AIUsage(
+            input_tokens=80,
+            output_tokens=40,
+            total_tokens=120,
+        ),
+        request_id=("req-section-test"),
+    )

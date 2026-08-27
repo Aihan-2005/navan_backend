@@ -22,10 +22,6 @@ from apps.reading.services import (
     retry_failed_reading_analysis,
 )
 
-from .exceptions import (
-    ReadingConflictAPIException,
-    ReadingRetryNotAllowedAPIException,
-)
 from .selectors import (
     get_user_analysis,
     get_user_analysis_section,
@@ -46,10 +42,9 @@ READING_SERVICE_EXCEPTIONS = (
 )
 
 
-def _raise_api_error(exc: Exception) -> None:
-    """
-    Translate domain exceptions into HTTP/DRF exceptions.
-    """
+def _service_error_response(
+    exc: Exception,
+) -> Response:
 
     if isinstance(
         exc,
@@ -67,26 +62,30 @@ def _raise_api_error(exc: Exception) -> None:
         exc,
         ActiveReadingConflictError,
     ):
-        detail = {
+        payload = {
             "detail": str(exc),
             "code": "active_reading_conflict",
         }
 
         if exc.analysis_id is not None:
-            detail["active_analysis_id"] = exc.analysis_id
+            payload["active_analysis_id"] = exc.analysis_id
 
-        raise ReadingConflictAPIException(detail=detail) from exc
+        return Response(
+            payload,
+            status=status.HTTP_409_CONFLICT,
+        )
 
     if isinstance(
         exc,
         ReadingRetryNotAllowedError,
     ):
-        raise ReadingRetryNotAllowedAPIException(
-            detail={
+        return Response(
+            {
                 "detail": str(exc),
                 "code": ("reading_retry_not_allowed"),
-            }
-        ) from exc
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
 
     raise exc
 
@@ -117,14 +116,11 @@ class ReadingAnalysisCreateAPIView(APIView):
             )
 
         except READING_SERVICE_EXCEPTIONS as exc:
-            _raise_api_error(exc)
+            return _service_error_response(exc)
 
         response_serializer = ReadingAnalysisSerializer(analysis)
 
-        if created:
-            response_status = status.HTTP_202_ACCEPTED
-        else:
-            response_status = status.HTTP_200_OK
+        response_status = status.HTTP_202_ACCEPTED if created else status.HTTP_200_OK
 
         return Response(
             {
@@ -191,8 +187,8 @@ class ReadingAnalysisSectionListAPIView(APIView):
 
         return Response(
             {
-                "analysis_id": (analysis.id),
-                "status": (analysis.status),
+                "analysis_id": analysis.id,
+                "status": analysis.status,
                 "progress_percent": (analysis.progress_percent),
                 "count": len(results),
                 "results": results,
@@ -250,7 +246,7 @@ class ReadingAnalysisRetryAPIView(APIView):
             )
 
         except READING_SERVICE_EXCEPTIONS as exc:
-            _raise_api_error(exc)
+            return _service_error_response(exc)
 
         serializer = ReadingAnalysisSerializer(new_analysis)
 
