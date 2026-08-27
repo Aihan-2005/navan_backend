@@ -66,7 +66,9 @@ class SpeakingSessionListCreateView(generics.ListCreateAPIView):
             transcription_raw=opening.raw,
         )
 
-        return Response(SpeakingSessionDetailSerializer(session).data, status=status.HTTP_201_CREATED)
+        return Response(
+            SpeakingSessionDetailSerializer(session).data, status=status.HTTP_201_CREATED
+        )
 
 
 class SpeakingSessionDetailView(generics.RetrieveAPIView):
@@ -109,7 +111,9 @@ class SpeakingTurnCreateView(generics.CreateAPIView):
             speaker=SpeakingTurn.Speaker.USER,
             order=next_order,
             audio_file=audio_file,
-            audio_format=audio_file.name.rsplit(".", 1)[-1].lower() if "." in audio_file.name else "",
+            audio_format=audio_file.name.rsplit(".", 1)[-1].lower()
+            if "." in audio_file.name
+            else "",
             audio_size_bytes=audio_file.size,
             audio_duration_seconds=serializer.validated_data["audio_duration_seconds"],
             transcription_status=SpeakingTurn.TranscriptionStatus.QUEUED,
@@ -142,7 +146,10 @@ class SpeakingSessionCompleteView(APIView):
 
     def post(self, request, session_id):
         session = get_object_or_404(
-            SpeakingSession, id=session_id, user=request.user, status=SpeakingSession.Status.IN_PROGRESS
+            SpeakingSession,
+            id=session_id,
+            user=request.user,
+            status=SpeakingSession.Status.IN_PROGRESS,
         )
 
         user_turn_count = session.turns.filter(speaker=SpeakingTurn.Speaker.USER).count()
@@ -165,7 +172,9 @@ class SpeakingSessionCompleteView(APIView):
         evaluation = SpeakingEvaluation.objects.create(session=session)
         evaluate_session_task.delay(str(evaluation.id))
 
-        return Response(SpeakingEvaluationSerializer(evaluation).data, status=status.HTTP_202_ACCEPTED)
+        return Response(
+            SpeakingEvaluationSerializer(evaluation).data, status=status.HTTP_202_ACCEPTED
+        )
 
 
 class SpeakingEvaluationDetailView(generics.RetrieveAPIView):
@@ -176,7 +185,9 @@ class SpeakingEvaluationDetailView(generics.RetrieveAPIView):
 
     def get_object(self):
         return get_object_or_404(
-            SpeakingEvaluation, session__id=self.kwargs["session_id"], session__user=self.request.user
+            SpeakingEvaluation,
+            session__id=self.kwargs["session_id"],
+            session__user=self.request.user,
         )
 
 
@@ -184,10 +195,15 @@ class SpeakingStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        sessions = SpeakingSession.objects.filter(user=request.user, status=SpeakingSession.Status.COMPLETED)
+        sessions = SpeakingSession.objects.filter(
+            user=request.user, status=SpeakingSession.Status.COMPLETED
+        )
         week_ago = timezone.now() - timedelta(days=7)
         minutes_this_week = (
-            sessions.filter(completed_at__gte=week_ago).aggregate(total=Sum("duration_seconds"))["total"] or 0
+            sessions.filter(completed_at__gte=week_ago).aggregate(total=Sum("duration_seconds"))[
+                "total"
+            ]
+            or 0
         ) / 60
 
         evaluations = SpeakingEvaluation.objects.filter(

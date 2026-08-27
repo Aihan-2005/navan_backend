@@ -1,10 +1,12 @@
-from rest_framework.exceptions import AuthenticationFailed
-from rest_framework_simplejwt.tokens import RefreshToken
 import secrets
 from math import ceil
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from .models import PasswordResetOTP
 from .tokens import issue_password_reset_token
 
@@ -41,9 +43,7 @@ def create_password_reset_otp(user):
 
     if current_otp is not None:
         if not current_otp.is_expired:
-            remaining_seconds = ceil(
-                (current_otp.expires_at - timezone.now()).total_seconds()
-            )
+            remaining_seconds = ceil((current_otp.expires_at - timezone.now()).total_seconds())
 
             raise OTPStillActiveError(
                 retry_after=max(remaining_seconds, 1),
@@ -124,6 +124,7 @@ def verify_password_reset_otp(identifier, raw_code):
     )
 
     return reset_token
+
 
 @transaction.atomic
 def reset_user_password(*, user, otp, new_password):

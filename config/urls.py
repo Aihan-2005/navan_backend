@@ -17,11 +17,14 @@ urlpatterns = [
         include("apps.listening.api.urls"),
     ),
     path(
-        "api/v1/speaking/", 
-        include("apps.speaking.urls")
+        "api/v1/speaking/",
+        include("apps.speaking.urls"),
+    ),
+    path(
+        "api/v1/reading/",
+        include("apps.reading.api.urls"),
     ),
 ]
-
 
 
 if settings.DEBUG:

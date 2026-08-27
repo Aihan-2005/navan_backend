@@ -69,7 +69,9 @@ class SpeakingSession(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="speaking_sessions"
     )
-    exercise = models.ForeignKey(SpeakingExercise, on_delete=models.PROTECT, related_name="sessions")
+    exercise = models.ForeignKey(
+        SpeakingExercise, on_delete=models.PROTECT, related_name="sessions"
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.IN_PROGRESS)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -108,12 +110,14 @@ class SpeakingTurn(models.Model):
     text = models.TextField(blank=True)
 
     audio_file = models.FileField(upload_to="speaking/audio/%Y/%m/", null=True, blank=True)
-    audio_format = models.CharField(max_length=10, blank=True)       # e.g. "m4a", "webm"
+    audio_format = models.CharField(max_length=10, blank=True)  # e.g. "m4a", "webm"
     audio_size_bytes = models.PositiveIntegerField(null=True, blank=True)
     audio_duration_seconds = models.FloatField(null=True, blank=True)
 
     transcription_status = models.CharField(
-        max_length=20, choices=TranscriptionStatus.choices, default=TranscriptionStatus.NOT_APPLICABLE
+        max_length=20,
+        choices=TranscriptionStatus.choices,
+        default=TranscriptionStatus.NOT_APPLICABLE,
     )
     transcription_raw = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -127,7 +131,6 @@ class SpeakingTurn(models.Model):
 
 
 class SpeakingEvaluation(models.Model):
-
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
         PROCESSING = "processing", "Processing"
@@ -135,7 +138,9 @@ class SpeakingEvaluation(models.Model):
         FAILED = "failed", "Failed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.OneToOneField(SpeakingSession, on_delete=models.CASCADE, related_name="evaluation")
+    session = models.OneToOneField(
+        SpeakingSession, on_delete=models.CASCADE, related_name="evaluation"
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
 
     score = models.FloatField(null=True, blank=True)

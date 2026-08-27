@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from apps.speaking.models import SpeakingEvaluation, SpeakingExercise, SpeakingSession, SpeakingTag, SpeakingTurn
+from apps.speaking.models import (
+    SpeakingEvaluation,
+    SpeakingExercise,
+    SpeakingSession,
+    SpeakingTag,
+    SpeakingTurn,
+)
 
 
 class SpeakingTagSerializer(serializers.ModelSerializer):
@@ -15,8 +21,15 @@ class SpeakingExerciseListSerializer(serializers.ModelSerializer):
     class Meta:
         model = SpeakingExercise
         fields = [
-            "id", "title", "description", "exercise_type", "cefr_level",
-            "coaching_style", "estimated_minutes", "tags", "is_recommended",
+            "id",
+            "title",
+            "description",
+            "exercise_type",
+            "cefr_level",
+            "coaching_style",
+            "estimated_minutes",
+            "tags",
+            "is_recommended",
         ]
 
 
@@ -24,8 +37,16 @@ class SpeakingTurnSerializer(serializers.ModelSerializer):
     class Meta:
         model = SpeakingTurn
         fields = [
-            "id", "speaker", "order", "text", "audio_file", "audio_format",
-            "audio_size_bytes", "audio_duration_seconds", "transcription_status", "created_at",
+            "id",
+            "speaker",
+            "order",
+            "text",
+            "audio_file",
+            "audio_format",
+            "audio_size_bytes",
+            "audio_duration_seconds",
+            "transcription_status",
+            "created_at",
         ]
         read_only_fields = ["id", "text", "transcription_status", "created_at"]
 
@@ -35,7 +56,15 @@ class SpeakingSessionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SpeakingSession
-        fields = ["id", "exercise", "exercise_title", "status", "started_at", "completed_at", "duration_seconds"]
+        fields = [
+            "id",
+            "exercise",
+            "exercise_title",
+            "status",
+            "started_at",
+            "completed_at",
+            "duration_seconds",
+        ]
         read_only_fields = fields
 
 
@@ -58,7 +87,7 @@ class SpeakingSessionCreateSerializer(serializers.ModelSerializer):
         return exercise
 
 
-MAX_RECORDING_SECONDS = 180 
+MAX_RECORDING_SECONDS = 180
 
 
 class SpeakingTurnCreateSerializer(serializers.ModelSerializer):
@@ -86,7 +115,15 @@ class SpeakingTurnCreateSerializer(serializers.ModelSerializer):
 class SpeakingEvaluationSerializer(serializers.ModelSerializer):
     class Meta:
         model = SpeakingEvaluation
-        fields = ["id", "status", "score", "analysis", "error_message", "created_at", "completed_at"]
+        fields = [
+            "id",
+            "status",
+            "score",
+            "analysis",
+            "error_message",
+            "created_at",
+            "completed_at",
+        ]
         read_only_fields = fields
 
 

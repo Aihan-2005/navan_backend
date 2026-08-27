@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from apps.speaking.models import SpeakingEvaluation, SpeakingExercise, SpeakingSession, SpeakingTag, SpeakingTurn
+from apps.speaking.models import (
+    SpeakingEvaluation,
+    SpeakingExercise,
+    SpeakingSession,
+    SpeakingTag,
+    SpeakingTurn,
+)
 
 
 @admin.register(SpeakingTag)

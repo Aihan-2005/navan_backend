@@ -5,6 +5,7 @@ from .validators import (
     validate_identifier,
 )
 
+
 class UserManager(BaseUserManager):
     def create_user(
         self,

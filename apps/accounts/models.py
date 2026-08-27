@@ -1,46 +1,65 @@
-from django.contrib.auth.base_user import AbstractBaseUser
-from django.contrib.auth.models import PermissionsMixin
-from django.db import models
-from .managers import UserManager
 from datetime import timedelta
+
 from django.conf import settings
-from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.base_user import (
+    AbstractBaseUser,
+)
+from django.contrib.auth.hashers import (
+    check_password,
+    make_password,
+)
+from django.contrib.auth.models import (
+    PermissionsMixin,
+)
 from django.db import models
 from django.utils import timezone
 
+from .managers import UserManager
 
-class User(AbstractBaseUser, PermissionsMixin):
+
+class User(
+    AbstractBaseUser,
+    PermissionsMixin,
+):
     LEVEL_CHOICES = [
-    ("A1", "A1"),
-    ("A2", "A2"),
-    ("B1", "B1"),
-    ("B2", "B2"),
-    ("C1", "C1"),
-    ("C2", "C2"),
+        ("A1", "A1"),
+        ("A2", "A2"),
+        ("B1", "B1"),
+        ("B2", "B2"),
+        ("C1", "C1"),
+        ("C2", "C2"),
     ]
+
     level = models.CharField(
         max_length=2,
         choices=LEVEL_CHOICES,
-        null=True,
         blank=True,
+        default="",
     )
+
     name = models.CharField(
         max_length=150,
     )
+
     identifier = models.CharField(
         max_length=254,
         unique=True,
     )
+
     is_active = models.BooleanField(
         default=True,
     )
+
     is_staff = models.BooleanField(
         default=False,
     )
+
     objects = UserManager()
-    
+
     USERNAME_FIELD = "identifier"
-    REQUIRED_FIELDS = ["name"]
+    REQUIRED_FIELDS = [
+        "name",
+    ]
 
     def __str__(self) -> str:
         return self.identifier
@@ -48,12 +67,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class PasswordResetOTP(models.Model):
     TTL = timedelta(minutes=2)
+
     MAX_FAILED_ATTEMPTS = 5
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="password_reset_otp",
+        related_name=("password_reset_otp"),
     )
 
     code_hash = models.CharField(
@@ -68,10 +88,19 @@ class PasswordResetOTP(models.Model):
         auto_now_add=True,
     )
 
-    def set_code(self, raw_code: str) -> None:
+    def __str__(self) -> str:
+        return f"Password reset OTP for {self.user.identifier}"
+
+    def set_code(
+        self,
+        raw_code: str,
+    ) -> None:
         self.code_hash = make_password(raw_code)
 
-    def check_code(self, raw_code: str) -> bool:
+    def check_code(
+        self,
+        raw_code: str,
+    ) -> bool:
         return check_password(
             raw_code,
             self.code_hash,
@@ -92,6 +121,3 @@ class PasswordResetOTP(models.Model):
     @property
     def is_usable(self) -> bool:
         return not self.is_expired and not self.is_locked
-
-    def __str__(self) -> str:
-        return f"Password reset OTP for " f"{self.user.identifier}"
